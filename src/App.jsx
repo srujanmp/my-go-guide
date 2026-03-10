@@ -151,6 +151,40 @@ export default function GoGuide() {
             </div>
           </div>
 
+          {/* Beginner support (every page) */}
+          <div style={{ padding: "14px 32px 0", background: "#0d1117" }}>
+            <div style={{
+              background: "#111827",
+              border: "1px solid #30363d",
+              borderRadius: "8px",
+              padding: "14px 16px"
+            }}>
+              <div style={{ fontSize: "11px", color: "#8b949e", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>
+                Beginner Context
+              </div>
+              <div style={{ fontSize: "12px", lineHeight: "1.7", color: "#c9d1d9" }}>
+                <div><strong style={{ color: "#e6edf3" }}>🎯 Lesson Goal:</strong> {support.lessonGoal}</div>
+                <div style={{ marginTop: "6px" }}><strong style={{ color: "#e6edf3" }}>🧠 Mental Model:</strong> {support.mentalModel}</div>
+                <div style={{ marginTop: "6px" }}><strong style={{ color: "#e6edf3" }}>🚀 Why it matters:</strong> {support.whyItMatters}</div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "12px" }}>
+                <div style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: "6px", padding: "10px 12px" }}>
+                  <div style={{ fontSize: "11px", color: section.color, fontWeight: 700, marginBottom: "6px" }}>🧪 Practice Tasks</div>
+                  {support.practice.map((item, idx) => (
+                    <div key={idx} style={{ fontSize: "11px", color: "#8b949e", lineHeight: "1.6" }}>• {item}</div>
+                  ))}
+                </div>
+                <div style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: "6px", padding: "10px 12px" }}>
+                  <div style={{ fontSize: "11px", color: "#f0883e", fontWeight: 700, marginBottom: "6px" }}>⚠️ Common Mistakes</div>
+                  {support.pitfalls.map((item, idx) => (
+                    <div key={idx} style={{ fontSize: "11px", color: "#8b949e", lineHeight: "1.6" }}>• {item}</div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Code block */}
           <div style={{ padding: "16px 32px 32px", flex: 1 }}>
             <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: "8px", overflow: "hidden" }}>
