@@ -1,6 +1,52 @@
 import { useState } from "react";
 import { sections } from "./data/sections";
-import { lessonDeepDive } from "./data/lessonDeepDive";
+
+const GO_KEYWORDS = new Set([
+  "package", "import", "func", "return", "if", "else", "for", "range", "type", "struct",
+  "var", "const", "interface", "map", "switch", "case", "default", "defer", "go", "chan", "select",
+  "break", "continue", "fallthrough"
+]);
+
+const GO_TYPES = new Set(["string", "int", "float64", "bool", "error", "byte", "rune"]);
+
+function colorizeGoLine(line, lineIndex) {
+  const trimmed = line.trim();
+  if (trimmed.startsWith("//")) {
+    return <span key={lineIndex} style={{ color: "#8b949e" }}>{line}</span>;
+  }
+
+  const parts = line.split(/(`[^`]*`|"[^"]*"|\b)/);
+  return (
+    <span key={lineIndex}>
+      {parts.map((part, idx) => {
+        if (!part) return null;
+        if (part.startsWith("\"") || part.startsWith("`")) {
+          return <span key={idx} style={{ color: "#a5d6ff" }}>{part}</span>;
+        }
+        if (GO_KEYWORDS.has(part)) {
+          return <span key={idx} style={{ color: "#ff7b72" }}>{part}</span>;
+        }
+        if (GO_TYPES.has(part)) {
+          return <span key={idx} style={{ color: "#79c0ff" }}>{part}</span>;
+        }
+        if (/^[0-9]+$/.test(part)) {
+          return <span key={idx} style={{ color: "#79c0ff" }}>{part}</span>;
+        }
+        return <span key={idx}>{part}</span>;
+      })}
+    </span>
+  );
+}
+
+function renderGoCode(code) {
+  const lines = code.split("\n");
+  return lines.map((line, idx) => (
+    <div key={idx}>
+      {colorizeGoLine(line, idx)}
+      {idx < lines.length - 1 ? "\n" : null}
+    </div>
+  ));
+}
 
 export default function GoGuide() {
   const [activeSection, setActiveSection] = useState(0);
@@ -9,8 +55,6 @@ export default function GoGuide() {
 
   const section = sections[activeSection];
   const lesson = section.lessons[activeLesson];
-  const deepDive = lessonDeepDive[lesson.title];
-
   const copy = () => {
     navigator.clipboard.writeText(lesson.code);
     setCopied(true);
@@ -107,25 +151,6 @@ export default function GoGuide() {
             </div>
           </div>
 
-          {/* Topic-specific deep dive (every lesson) */}
-          <div style={{ padding: "14px 32px 0", background: "#0d1117" }}>
-            <div style={{ background: "#111827", border: "1px solid #30363d", borderRadius: "8px", padding: "14px 16px" }}>
-              <div style={{ fontSize: "11px", color: section.color, textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px", fontWeight: 700 }}>
-                More Knowledge for this Lesson
-              </div>
-              <div style={{ fontSize: "12px", color: "#c9d1d9", lineHeight: "1.7" }}>
-                <div><strong style={{ color: "#e6edf3" }}>Concept in depth:</strong> {deepDive.concept}</div>
-                <div style={{ marginTop: "6px" }}><strong style={{ color: "#e6edf3" }}>Real-world usage:</strong> {deepDive.realWorld}</div>
-              </div>
-              <div style={{ marginTop: "10px", background: "#0d1117", border: "1px solid #30363d", borderRadius: "6px", padding: "10px 12px" }}>
-                <div style={{ fontSize: "11px", color: "#8b949e", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "6px" }}>Next things to try</div>
-                {deepDive.nextSteps.map((step, idx) => (
-                  <div key={idx} style={{ fontSize: "11px", color: "#8b949e", lineHeight: "1.6" }}>• {step}</div>
-                ))}
-              </div>
-            </div>
-          </div>
-
           {/* Code block */}
           <div style={{ padding: "16px 32px 32px", flex: 1 }}>
             <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: "8px", overflow: "hidden" }}>
@@ -163,7 +188,7 @@ export default function GoGuide() {
                 background: "#0d1117",
                 fontFamily: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace"
               }}>
-                <code>{lesson.code}</code>
+                <code>{renderGoCode(lesson.code)}</code>
               </pre>
             </div>
           </div>
