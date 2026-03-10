@@ -210,7 +210,7 @@ func main() {
     lessons: [
       {
         title: "What is Gin & Setup",
-        content: `Gin is a web framework for Go. It makes building REST APIs super easy and fast. Think of it like Express.js for Node or Flask for Python — but much faster.`,
+        content: `Gin is a web framework for Go. It makes building REST APIs super easy and fast. Think of it like Express.js for Node or Flask for Python — but much faster. Mental model: Gin = router + middleware + handlers. Router maps URL -> function, middleware runs shared checks (logging/auth/rate limit), and handlers execute business use-cases.`,
         code: `// First, initialize your Go project:
 // $ go mod init myapp
 
@@ -641,7 +641,7 @@ func main() {
     lessons: [
       {
         title: "What is Redis & Setup",
-        content: `Redis is an in-memory database — super fast because everything is in RAM. Use it for caching (storing results so you don't hit Postgres every time), sessions, and real-time features.`,
+        content: `Redis is an in-memory database — super fast because everything is in RAM. Use it for caching (storing results so you don't hit Postgres every time), sessions, and real-time features. In auth systems, Redis is also perfect for refresh-token revocation and rate limiting because TTL and atomic counters are built-in.`,
         code: `// Install:
 // $ go get github.com/redis/go-redis/v9
 
@@ -832,7 +832,7 @@ func main() {
     lessons: [
       {
         title: "What is RabbitMQ?",
-        content: `RabbitMQ is a message broker — a middleman between services. Instead of Service A calling Service B directly, A sends a message to RabbitMQ, and B picks it up when ready. This decouples your services and handles load spikes gracefully.`,
+        content: `RabbitMQ is a message broker — a middleman between services. Instead of Service A calling Service B directly, A sends a message to RabbitMQ, and B picks it up when ready. This decouples your services and handles load spikes gracefully. In microservices, this lets auth publish user events while profile/email/analytics services react independently.`,
         code: `// Install:
 // $ go get github.com/rabbitmq/amqp091-go
 
@@ -1112,8 +1112,247 @@ func main() {
 }`
       }
     ]
+  },
+  {
+    id: "auth-architecture",
+    title: "Auth Service Blueprint",
+    icon: "🧭",
+    color: "#8b5cf6",
+    lessons: [
+      {
+        title: "Gin in This Project (Mental Model)",
+        content: `Use this map when reading auth code: main.go wires dependencies + middleware + routes, handlers handle HTTP, service handles business rules, repository handles database reads/writes. Your route groups (/api/v1 then /auth) make API structure explicit and easy to scale.`,
+        code: `// Project mental model
+//
+// main.go
+//   ├─ init config + DB + Redis + RabbitMQ
+//   ├─ gin.New() + middleware
+//   └─ register routes under /api/v1/auth
+//
+// handlers/
+//   ├─ parse/validate request JSON
+//   ├─ call service methods
+//   └─ map errors -> HTTP status and response shape
+//
+// service/
+//   ├─ Register/Login/Refresh/Logout logic
+//   ├─ password hashing + token issuing
+//   └─ publish domain events
+//
+// repository/
+//   ├─ FindByEmail, FindByPhone
+//   └─ Create/Update user rows in Postgres
+//
+// Quick reading order for beginners:
+// 1) route registration
+// 2) one handler (register)
+// 3) matching service method
+// 4) repository calls`
+      },
+      {
+        title: "Register + Login Flow (Production-ish)",
+        content: `Register flow: validate input, enforce unique email/phone, hash password, persist user, publish USER_CREATED event, then return access+refresh tokens. Login flow: find user by email, reject deleted/invalid credentials, return fresh tokens. This is a realistic backend pattern you can reuse in interviews and production code.`,
+        code: `// POST /api/v1/auth/register
+// Handler
+//   1) ShouldBindJSON(req)
+//   2) svc.Register(req)
+//   3) map errors: 409 conflict, 400 bad request, 500 internal
+//
+// Service.Register
+//   1) ensure email unique
+//   2) ensure phone unique
+//   3) bcrypt hash password
+//   4) set default role USER + validate
+//   5) insert user into DB
+//   6) publish user.created event
+//   7) buildAuthResponse() -> access + refresh token
+//
+// POST /api/v1/auth/login
+// Handler
+//   1) bind request
+//   2) svc.Login(req)
+//   3) return 401 when credentials invalid/deleted
+//
+// Service.Login
+//   1) find user by email
+//   2) reject if missing or soft-deleted
+//   3) bcrypt compare hash
+//   4) buildAuthResponse() -> new tokens`
+      },
+      {
+        title: "Redis: Refresh Tokens + Rate Limiting",
+        content: `Redis solves two auth problems fast: token revocation and request throttling. Store refresh token with TTL (7d for example), verify it during refresh, and delete it on logout to revoke immediately. For rate limiting, increment route+ip counters with an expiry window. If Redis is unavailable, many systems fail open to avoid full outage.`,
+        code: `// On login/register
+// SET refresh:<userID> <refreshToken> EX 7d
+//
+// On refresh
+// 1) parse refresh JWT
+// 2) GET refresh:<userID>
+// 3) token must match stored value
+// 4) issue new tokens
+//
+// On logout/delete/ban
+// DEL refresh:<userID>
+//
+// Rate limit middleware (example)
+// key = ratelimit:<route>:<ip>
+// count = INCR key
+// if count == 1 => EXPIRE key window
+// if count > limit => block 429
+// if Redis error => allow request (fail open)`
+      },
+      {
+        title: "RabbitMQ: Event-Driven Profile Sync",
+        content: `Auth service publishes events like user.created and user.deleted. User service consumes them and creates/deletes profile records. This keeps services decoupled: auth doesn't need direct DB access to profile data. Use manual ack/nack and DLQ so failed messages can be retried or inspected safely.`,
+        code: `// Publisher (auth-service)
+// exchange: user_events (topic)
+// routing keys:
+//   - user.created
+//   - user.deleted
+//
+// Consumer (user-service)
+// 1) declare same exchange
+// 2) bind queues:
+//    user.created.queue -> user.created
+//    user.deleted.queue -> user.deleted
+// 3) consume with manual acknowledgements
+//
+// Handler logic
+// on user.created => create profile row
+// on user.deleted => delete profile row
+// success => Ack
+// failure => Nack (optionally dead-letter)`
+      },
+      {
+        title: "Beginner Roadmap: Build It Step by Step",
+        content: `Don't build everything at once. Start with auth-only Gin routes, then add Redis refresh tokens, then RabbitMQ events. This incremental path reduces confusion and gives fast wins. Practice each step with curl/Postman before moving to the next one.`,
+        code: `// Step A: Minimal Gin auth
+// POST /register -> validate, hash, insert user
+// POST /login    -> verify password, return JWT
+//
+// Step B: Add Redis refresh flow
+// login/register -> SET refresh:<uid>
+// refresh        -> compare token with Redis value
+// logout         -> DEL refresh:<uid>
+//
+// Step C: Add RabbitMQ (single event first)
+// register -> publish user.created
+// consumer -> log "user created"
+// then upgrade consumer -> create profile in DB
+//
+// Minimal starter structure
+// cmd/server/main.go
+// internal/handler/auth_handler.go
+// internal/service/auth_service.go
+// internal/repository/user_repository.go
+// internal/middleware/jwt.go
+// internal/middleware/rate_limit.go`
+      }
+    ]
   }
 ];
+
+
+const beginnerSupportBySection = {
+  "Go Basics": {
+    mentalModel: "Go is built around clarity: small syntax, explicit errors, predictable performance.",
+    whyItMatters: "You are learning the language foundation used by all other sections (APIs, DB, cache, and messaging).",
+    practice: [
+      "Rewrite the sample with your own variable names and print values.",
+      "Intentionally trigger an error path and log it clearly.",
+      "Create a tiny CLI that accepts input and validates it."
+    ],
+    pitfalls: [
+      "Ignoring errors returned from functions.",
+      "Overusing global variables early in learning.",
+      "Confusing value receiver vs pointer receiver on methods."
+    ]
+  },
+  "Gin Web Framework": {
+    mentalModel: "Flow is Request -> middleware chain -> handler -> JSON response.",
+    whyItMatters: "Gin is the HTTP layer users talk to first. Clean routes and validation prevent lots of bugs.",
+    practice: [
+      "Add one protected route and one public route.",
+      "Return consistent JSON error shapes for 400/401/500.",
+      "Create /health endpoint and test with curl."
+    ],
+    pitfalls: [
+      "Not aborting context after auth/validation failure.",
+      "Mixing business logic directly in handlers.",
+      "Returning inconsistent status codes for similar errors."
+    ]
+  },
+  "PostgreSQL": {
+    mentalModel: "Postgres is your source of truth. Keep reads/writes explicit and predictable.",
+    whyItMatters: "Durable relational data powers users, products, and transactions in production apps.",
+    practice: [
+      "Create a table + perform create/read/update/delete manually.",
+      "Use placeholders ($1, $2) in every query.",
+      "Handle not found vs internal DB errors separately."
+    ],
+    pitfalls: [
+      "Forgetting to close rows.",
+      "Not checking query errors before scanning.",
+      "Building SQL strings manually with user input."
+    ]
+  },
+  Redis: {
+    mentalModel: "Redis is speed + TTL. Use it for temporary, high-frequency data.",
+    whyItMatters: "It reduces DB load and enables token revocation/rate limiting patterns used in auth systems.",
+    practice: [
+      "Implement cache-aside for one endpoint.",
+      "Store refresh token with expiry and verify on refresh.",
+      "Build per-IP rate limit keys with INCR + EXPIRE."
+    ],
+    pitfalls: [
+      "Forgetting expiry on temporary keys.",
+      "Not deleting/invalidation after underlying data changes.",
+      "Treating Redis as permanent storage for critical data."
+    ]
+  },
+  RabbitMQ: {
+    mentalModel: "Producer publishes events, consumers process asynchronously at their own speed.",
+    whyItMatters: "It decouples services and improves resilience under spikes or temporary downstream failures.",
+    practice: [
+      "Publish one event after user registration.",
+      "Consume with manual ack and retry once on failure.",
+      "Add dead-letter queue for permanently bad messages."
+    ],
+    pitfalls: [
+      "Auto-ack enabled before successful processing.",
+      "No idempotency checks in consumers.",
+      "No monitoring for queue depth or failed messages."
+    ]
+  },
+  "Auth Service Blueprint": {
+    mentalModel: "Keep strict boundaries: handler (transport), service (rules), repository (storage), events (integration).",
+    whyItMatters: "This structure scales from beginner projects to real production codebases.",
+    practice: [
+      "Trace one request end-to-end from route to DB/event.",
+      "Map each service error to a deliberate HTTP code.",
+      "Draw a sequence diagram for register/login/refresh/logout."
+    ],
+    pitfalls: [
+      "Putting token logic in handlers instead of service layer.",
+      "Not revoking refresh tokens on logout/delete/ban.",
+      "Tightly coupling auth and profile services directly."
+    ]
+  }
+};
+
+function buildLessonSupport(section, lesson) {
+  const sectionSupport = beginnerSupportBySection[section.title] ?? {
+    mentalModel: "Break problems into small steps and test each step.",
+    whyItMatters: "Good fundamentals compound into better system design.",
+    practice: ["Re-type the example", "Change one variable and observe behavior", "Write a tiny test case"],
+    pitfalls: ["Skipping validation", "Ignoring failure paths", "Not documenting assumptions"]
+  };
+
+  return {
+    ...sectionSupport,
+    lessonGoal: `After this lesson (${lesson.title}), you should explain the concept in your own words and implement a tiny variation without copy-paste.`
+  };
+}
 
 export default function GoGuide() {
   const [activeSection, setActiveSection] = useState(0);
@@ -1122,6 +1361,7 @@ export default function GoGuide() {
 
   const section = sections[activeSection];
   const lesson = section.lessons[activeLesson];
+  const support = buildLessonSupport(section, lesson);
 
   const copy = () => {
     navigator.clipboard.writeText(lesson.code);
@@ -1216,6 +1456,40 @@ export default function GoGuide() {
               color: "#c9d1d9"
             }}>
               💡 {lesson.content}
+            </div>
+          </div>
+
+          {/* Beginner support (every page) */}
+          <div style={{ padding: "14px 32px 0", background: "#0d1117" }}>
+            <div style={{
+              background: "#111827",
+              border: "1px solid #30363d",
+              borderRadius: "8px",
+              padding: "14px 16px"
+            }}>
+              <div style={{ fontSize: "11px", color: "#8b949e", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>
+                Beginner Context
+              </div>
+              <div style={{ fontSize: "12px", lineHeight: "1.7", color: "#c9d1d9" }}>
+                <div><strong style={{ color: "#e6edf3" }}>🎯 Lesson Goal:</strong> {support.lessonGoal}</div>
+                <div style={{ marginTop: "6px" }}><strong style={{ color: "#e6edf3" }}>🧠 Mental Model:</strong> {support.mentalModel}</div>
+                <div style={{ marginTop: "6px" }}><strong style={{ color: "#e6edf3" }}>🚀 Why it matters:</strong> {support.whyItMatters}</div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "12px" }}>
+                <div style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: "6px", padding: "10px 12px" }}>
+                  <div style={{ fontSize: "11px", color: section.color, fontWeight: 700, marginBottom: "6px" }}>🧪 Practice Tasks</div>
+                  {support.practice.map((item, idx) => (
+                    <div key={idx} style={{ fontSize: "11px", color: "#8b949e", lineHeight: "1.6" }}>• {item}</div>
+                  ))}
+                </div>
+                <div style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: "6px", padding: "10px 12px" }}>
+                  <div style={{ fontSize: "11px", color: "#f0883e", fontWeight: 700, marginBottom: "6px" }}>⚠️ Common Mistakes</div>
+                  {support.pitfalls.map((item, idx) => (
+                    <div key={idx} style={{ fontSize: "11px", color: "#8b949e", lineHeight: "1.6" }}>• {item}</div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
