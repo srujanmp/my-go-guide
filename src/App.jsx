@@ -39,12 +39,12 @@ function colorizeGoLine(line, lineIndex) {
 }
 
 function renderGoCode(code) {
-  const lines = code.split("\n");
+  const lines = (code ?? "").split("\n");
   return lines.map((line, idx) => (
-    <div key={idx}>
+    <span key={idx}>
       {colorizeGoLine(line, idx)}
-      {idx < lines.length - 1 ? "\n" : null}
-    </div>
+      {idx < lines.length - 1 ? <br /> : null}
+    </span>
   ));
 }
 
@@ -53,13 +53,19 @@ export default function GoGuide() {
   const [activeLesson, setActiveLesson] = useState(0);
   const [copied, setCopied] = useState(false);
 
-  const section = sections[activeSection];
-  const lesson = section.lessons[activeLesson];
-  const copy = () => {
-    navigator.clipboard.writeText(lesson.code);
+  const section = sections?.[activeSection];
+  const lesson = section?.lessons?.[activeLesson];
+  const copy = async () => {
+    if (!lesson?.code) return;
+    if (!navigator?.clipboard?.writeText) return;
+    await navigator.clipboard.writeText(lesson.code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  if (!section || !lesson) {
+    return null;
+  }
 
   return (
     <div style={{ fontFamily: "'JetBrains Mono', 'Fira Code', monospace", background: "#0d1117", minHeight: "100vh", color: "#e6edf3" }}>
