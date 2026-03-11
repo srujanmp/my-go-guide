@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { sections } from "./data/sections";
 
 const GO_KEYWORDS = new Set([
@@ -52,6 +52,7 @@ export default function GoGuide() {
   const [activeSection, setActiveSection] = useState(0);
   const [activeLesson, setActiveLesson] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   const section = sections?.[activeSection];
   const lesson = section?.lessons?.[activeLesson];
@@ -62,6 +63,14 @@ export default function GoGuide() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 960px)");
+    const update = () => setIsMobile(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   if (!section || !lesson) {
     return null;
@@ -83,9 +92,9 @@ export default function GoGuide() {
         </div>
       </div>
 
-      <div style={{ display: "flex", height: "calc(100vh - 73px)" }}>
+      <div style={{ display: "flex", height: isMobile ? "auto" : "calc(100vh - 73px)", flexDirection: isMobile ? "column" : "row" }}>
         {/* Left sidebar — sections */}
-        <div style={{ width: "200px", background: "#161b22", borderRight: "1px solid #30363d", overflowY: "auto", flexShrink: 0 }}>
+        <div style={{ width: isMobile ? "100%" : "200px", background: "#161b22", borderRight: isMobile ? "none" : "1px solid #30363d", borderBottom: isMobile ? "1px solid #30363d" : "none", overflowY: "auto", flexShrink: 0, display: isMobile ? "grid" : "block", gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : undefined }}>
           {sections.map((s, i) => (
             <div
               key={s.id}
@@ -105,7 +114,7 @@ export default function GoGuide() {
         </div>
 
         {/* Middle — lesson list */}
-        <div style={{ width: "220px", background: "#0d1117", borderRight: "1px solid #30363d", overflowY: "auto", flexShrink: 0 }}>
+        <div style={{ width: isMobile ? "100%" : "220px", background: "#0d1117", borderRight: isMobile ? "none" : "1px solid #30363d", borderBottom: isMobile ? "1px solid #30363d" : "none", overflowY: "auto", flexShrink: 0, maxHeight: isMobile ? "200px" : "none" }}>
           <div style={{ padding: "12px 16px", fontSize: "10px", fontWeight: 700, color: "#8b949e", textTransform: "uppercase", letterSpacing: "1px", borderBottom: "1px solid #21262d" }}>
             {section.icon} {section.title}
           </div>
@@ -132,9 +141,9 @@ export default function GoGuide() {
         </div>
 
         {/* Main content */}
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", minWidth: 0 }}>
           {/* Lesson header */}
-          <div style={{ padding: "24px 32px 16px", borderBottom: "1px solid #21262d" }}>
+          <div style={{ padding: isMobile ? "18px 16px 12px" : "24px 32px 16px", borderBottom: "1px solid #21262d" }}>
             <div style={{ fontSize: "11px", color: section.color, fontWeight: 600, textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>
               {section.icon} {section.title} · Lesson {activeLesson + 1} of {section.lessons.length}
             </div>
@@ -142,7 +151,7 @@ export default function GoGuide() {
           </div>
 
           {/* Explanation */}
-          <div style={{ padding: "20px 32px 0", background: "#0d1117" }}>
+          <div style={{ padding: isMobile ? "14px 16px 0" : "20px 32px 0", background: "#0d1117" }}>
             <div style={{
               background: "#161b22",
               border: `1px solid ${section.color}33`,
@@ -192,7 +201,7 @@ export default function GoGuide() {
           </div>
 
           {/* Code block */}
-          <div style={{ padding: "16px 32px 32px", flex: 1 }}>
+          <div style={{ padding: isMobile ? "12px 16px 18px" : "16px 32px 32px", flex: 1 }}>
             <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: "8px", overflow: "hidden" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid #30363d", background: "#1c2128" }}>
                 <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
@@ -222,7 +231,7 @@ export default function GoGuide() {
                 margin: 0,
                 padding: "20px",
                 overflowX: "auto",
-                fontSize: "12.5px",
+                fontSize: isMobile ? "11.5px" : "12.5px",
                 lineHeight: "1.7",
                 color: "#e6edf3",
                 background: "#0d1117",
@@ -235,7 +244,7 @@ export default function GoGuide() {
         </div>
 
         {/* Right — navigation */}
-        <div style={{ width: "180px", background: "#161b22", borderLeft: "1px solid #30363d", padding: "20px 16px", display: "flex", flexDirection: "column", gap: "8px", flexShrink: 0 }}>
+        <div style={{ width: isMobile ? "100%" : "180px", background: "#161b22", borderLeft: isMobile ? "none" : "1px solid #30363d", borderTop: isMobile ? "1px solid #30363d" : "none", padding: "20px 16px", display: "flex", flexDirection: "column", gap: "8px", flexShrink: 0 }}>
           <div style={{ fontSize: "10px", fontWeight: 700, color: "#8b949e", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>Navigate</div>
 
           {/* Prev lesson */}
